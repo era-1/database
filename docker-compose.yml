@@ -1,0 +1,56 @@
+networks:
+  pg-net:
+    driver: bridge
+
+services:
+  database:
+    build:
+      context: .
+      dockerfile: database.Dockerfile
+    ports:
+      - "5432:5432"
+    networks:
+      - "pg-net"
+
+  postgrest:
+    image: "postgrest/postgrest"
+    ports:
+      - "3000:3000"
+    environment:
+      PGRST_DB_URI: "postgres://postgres:postgres@database:5432/postgres"
+      PGRST_DB_SCHEMA: "public"
+      PGRST_DB_ANON_ROLE: "web_anon"
+    depends_on:
+      - "database"
+    networks:
+      - "pg-net"
+
+  save-swagger:
+    image: "busybox"
+    depends_on:
+      - "postgrest"
+    volumes:
+      - "swagger-json:/spec"
+    command: >
+      /bin/sh -c "sleep 15
+      && mkdir -p /spec
+      && wget -O /spec/swagger.json http://postgrest:3000"
+    networks:
+      - "pg-net"
+  swagger-ui:
+    image: "swaggerapi/swagger-ui"
+    expose:
+      - 8080
+    ports:
+      - "80:8080"
+    depends_on:
+      - "save-swagger"
+    environment:
+      SWAGGER_JSON: /spec/swagger.json
+    volumes:
+      - swagger-json:/spec
+    networks:
+      - "pg-net"
+
+volumes:
+  swagger-json:
